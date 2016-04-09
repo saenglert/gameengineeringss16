@@ -6,6 +6,7 @@ using Fusee.Engine.Core;
 using Fusee.Engine.Core.GUI;
 using Fusee.Math.Core;
 using Fusee.Serialization;
+using static Fusee.Engine.Core.Input;
 
 
 namespace Fusee.Tutorial.Core
@@ -15,22 +16,42 @@ namespace Fusee.Tutorial.Core
     public class Tutorial : RenderCanvas
     {
         private Mesh _mesh;
-        private const string _vertexShader = @"
-            attribute vec3 fuVertex;
 
-            void main()
-            {
-                gl_Position = vec4(fuVertex, 1.0);
-            }";
+        private IShaderParam _alphaParam;
+        private float _alpha;
 
-        private const string _pixelShader = @"
+        private IShaderParam _mouseParam;
+        private float2 _mousePosition ;
+
+        private const string VertexShader = @"
+        attribute vec3 fuVertex;
+        uniform float alpha;
+        varying vec3 modelpos;
+
+        void main()
+        {
+            modelpos = fuVertex;
+            float s = sin(alpha);
+            float c = cos(alpha);
+
+            mat3 rotation = mat3(c, 0, s,
+                                 0, 1, 0,
+                                 -s, 0, c);
+
+            gl_Position = vec4( rotation * modelpos, 1.0);
+        }";
+
+        private const string PixelShader = @"
             #ifdef GL_ES
                 precision highp float;
             #endif
+            varying vec3 modelpos;
+            uniform vec2 mousepos;
 
             void main()
             {
-                gl_FragColor = vec4(1, 1, 1, 1);
+                float dist = distance(mousepos, modelpos.xy);
+                gl_FragColor = vec4(modelpos * 0.5 + 0.5, dist * 0.1);
             }";
 
 
@@ -40,17 +61,43 @@ namespace Fusee.Tutorial.Core
             _mesh = new Mesh
             {
                 Vertices = new[]
-                {
-                    new float3(-0.75f, -0.75f, 0),
-                    new float3(0.75f, -0.75f, 0),
-                    new float3(0, 0.75f, 0),
-                },
-                Triangles = new ushort[] {0, 1, 2},
+        {
+            new float3(-0.5f, -0.5f, -0.5f ),
+            new float3(0.5f, -0.5f, -0.5f ),
+            new float3(0.5f , 0.5f , -0.5f),
+            new float3(-0.5f, 0.5f, -0.5f),
+
+            new float3(0.5f, -0.5f, 0.5f),
+            new float3(-0.5f, -0.5f, 0.5f),
+            new float3(-0.5f, 0.5f, 0.5f),
+            new float3(0.5f, 0.5f, 0.5f),
+                
+            new float3(0 , 1 , 0), 
+        },
+                Triangles = new ushort[]
+        {
+            0, 1, 2, // Front 1
+            0, 2, 3, // Front 2
+            1, 4, 7, // Right 1
+            1, 7, 2, // Right 2
+            4, 5, 6, // Back 1
+            4, 6, 7, // Back 2
+            5, 0, 3, // Left 1
+            5, 3, 6, // Left 2
+            3, 2, 8, // Top Front
+            2, 7, 8, // Top Right
+            7, 6, 8, // Top Back
+            6, 3, 8, // Top Left
+        },
             };
 
-            var shader = RC.CreateShader(_vertexShader, _pixelShader);
+            var shader = RC.CreateShader(VertexShader, PixelShader);
             RC.SetShader(shader);
-
+            _mouseParam = RC.GetShaderParam(shader, "mousepos");
+            _mousePosition = new float2(0,0);
+            _alphaParam = RC.GetShaderParam(shader, "alpha");
+            _alpha = 0;
+     
             // Set the clear color for the backbuffer.
             RC.ClearColor = new float4(0.1f, 0.3f, 0.2f, 1);
         }
@@ -60,6 +107,26 @@ namespace Fusee.Tutorial.Core
         {
             // Clear the backbuffer
             RC.Clear(ClearFlags.Color | ClearFlags.Depth);
+
+            float2 mouseSpeed = Mouse.Velocity;
+            float arrowSpeed = Keyboard.LeftRightAxis;
+            float adSpeed = Keyboard.ADAxis;
+
+            if (Mouse.LeftButton)
+            {
+                _alpha += mouseSpeed.x * 0.0001f;
+            }
+            else
+            {
+                
+                if (Keyboard.IsKeyDown(KeyCodes.Left) || Keyboard.IsKeyDown(KeyCodes.Right)) _alpha += arrowSpeed * 0.01f;
+                if (Keyboard.IsKeyDown(KeyCodes.A) || Keyboard.IsKeyDown(KeyCodes.D)) _alpha += adSpeed * 0.01f;
+            }
+
+            _mousePosition = Mouse.Position;
+
+            RC.SetShaderParam(_mouseParam, _mousePosition);
+            RC.SetShaderParam(_alphaParam, _alpha);
 
             RC.Render(_mesh);
 
