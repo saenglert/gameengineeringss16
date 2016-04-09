@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using Fusee.Base.Common;
 using Fusee.Base.Core;
 using Fusee.Engine.Common;
@@ -27,6 +28,7 @@ namespace Fusee.Tutorial.Core
         attribute vec3 fuVertex;
         uniform float alpha;
         varying vec3 modelpos;
+        varying vec3 endpos;
 
         void main()
         {
@@ -39,6 +41,7 @@ namespace Fusee.Tutorial.Core
                                  -s, 0, c);
 
             gl_Position = vec4( rotation * modelpos, 1.0);
+            endpos = gl_Position;
         }";
 
         private const string PixelShader = @"
@@ -46,12 +49,13 @@ namespace Fusee.Tutorial.Core
                 precision highp float;
             #endif
             varying vec3 modelpos;
+            varying vec3 endpos;
             uniform vec2 mousepos;
 
             void main()
             {
-                float dist = distance(mousepos, modelpos.xy);
-                gl_FragColor = vec4(modelpos * 0.5 + 0.5, dist * 0.1);
+                float dist = distance(mousepos, endpos.xy);
+                gl_FragColor = vec4((modelpos * 0.5 + 0.5) * clamp(dist, 0, 1), 1 );
             }";
 
 
@@ -122,8 +126,9 @@ namespace Fusee.Tutorial.Core
                 if (Keyboard.IsKeyDown(KeyCodes.Left) || Keyboard.IsKeyDown(KeyCodes.Right)) _alpha += arrowSpeed * 0.01f;
                 if (Keyboard.IsKeyDown(KeyCodes.A) || Keyboard.IsKeyDown(KeyCodes.D)) _alpha += adSpeed * 0.01f;
             }
-
+            
             _mousePosition = Mouse.Position;
+            Debug.WriteLine(Mouse.Position);
 
             RC.SetShaderParam(_mouseParam, _mousePosition);
             RC.SetShaderParam(_alphaParam, _alpha);
