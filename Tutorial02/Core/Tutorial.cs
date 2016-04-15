@@ -128,7 +128,7 @@ namespace Fusee.Tutorial.Core
             }
             
             _mousePosition = Mouse.Position;
-            Debug.WriteLine(Mouse.Position);
+            
 
             RC.SetShaderParam(_mouseParam, _mousePosition);
             RC.SetShaderParam(_alphaParam, _alpha);

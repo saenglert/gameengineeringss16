@@ -1,5 +1,4 @@
-﻿using Fusee.Base.Common;
-using Fusee.Engine.Common;
+﻿using Fusee.Engine.Common;
 using Fusee.Engine.Core;
 using Fusee.Math.Core;
 using static Fusee.Engine.Core.Input;
@@ -11,36 +10,46 @@ namespace Fusee.Tutorial.Core
     public class Tutorial : RenderCanvas
     {
         private Mesh _mesh;
-        private const string _vertexShader = @"
-            attribute vec3 fuVertex;
-            uniform float alpha;
-            varying vec3 modelpos;
+        private const string VertexShader = @"
+        attribute vec3 fuVertex;
+        attribute vec3 fuNormal;
+        uniform mat4 xform;
+        varying vec3 modelpos;
+        varying vec3 normal;
+        void main()
+        {
+            modelpos = fuVertex;
+            normal = fuNormal;
+            gl_Position = xform * vec4(fuVertex, 1.0);
+        }";
 
-            void main()
-            {
-                modelpos = fuVertex;
-                float s = sin(alpha);
-                float c = cos(alpha);
-                gl_Position = vec4( fuVertex.x * c - fuVertex.z * s, 
-                                    fuVertex.y, 
-                                    fuVertex.x * s + fuVertex.z * c, 
-                                    1.0);
-            }";
+        private const string PixelShader = @"
+        #ifdef GL_ES
+            precision highp float;
+        #endif
+        varying vec3 modelpos;
+        varying vec3 normal;
 
-        private const string _pixelShader = @"
-            #ifdef GL_ES
-                precision highp float;
-            #endif
-            varying vec3 modelpos;
-
-            void main()
-            {
-                gl_FragColor = vec4(modelpos*0.5 + 0.5, 1);
-            }";
+        void main()
+        {
+            gl_FragColor = vec4(normal*0.5 + 0.5, 1);
+        }";
 
 
-        private IShaderParam _alphaParam;
-        private float _alpha;
+        private IShaderParam _xformParam;
+        private float4x4 _xform;
+        private float3 _alpha;
+
+        private float _yawCube1;
+        private float _pitchCube1;
+        private float _yawCube2;
+        private float _pitchCube2;
+
+        private float3 _rotation1;
+        private float3 _rotation2;
+        private float3 _rotation3;
+
+
 
         // Init is called on startup. 
         public override void Init()
@@ -143,10 +152,11 @@ namespace Fusee.Tutorial.Core
                 },
             };
 
-            var shader = RC.CreateShader(_vertexShader, _pixelShader);
+            var shader = RC.CreateShader(VertexShader, PixelShader);
             RC.SetShader(shader);
-            _alphaParam = RC.GetShaderParam(shader, "alpha");
-            _alpha = 0;
+            _xformParam = RC.GetShaderParam(shader, "xform");
+            _xform = float4x4.Identity;
+            _alpha = float3.Zero;
 
             // Set the clear color for the backbuffer
             RC.ClearColor = new float4(0.1f, 0.3f, 0.2f, 1);
@@ -158,14 +168,61 @@ namespace Fusee.Tutorial.Core
             // Clear the backbuffer
             RC.Clear(ClearFlags.Color | ClearFlags.Depth);
 
-            float2 speed = Mouse.Velocity;
-            _alpha += speed.x * 0.0001f;
-            RC.SetShaderParam(_alphaParam, _alpha);
+            float2 speed = Mouse.Velocity + Touch.GetVelocity(TouchPoints.Touchpoint_0);
+            if (Mouse.LeftButton || Touch.GetTouchActive(TouchPoints.Touchpoint_0))
+            {
+                _rotation1.x += speed.y * 0.0001f;
+                _rotation1.y += speed.x * 0.0001f;
+            }
 
+            float wheelspeed = Mouse.WheelVel;
+            _rotation1.z += wheelspeed * 0.001f;
+
+            _rotation2.x += Keyboard.ADAxis * 0.1f;
+            _rotation2.y += Keyboard.WSAxis * 0.1f;
+
+            _rotation3.x += Keyboard.LeftRightAxis * 0.1f;
+            _rotation3.y += Keyboard.UpDownAxis * 0.1f;
+
+            var aspectRatio = Width / (float)Height;
+            var projection = float4x4.CreatePerspectiveFieldOfView(3.141592f * 0.25f, aspectRatio, 0.01f, 20);
+            var view = float4x4.CreateTranslation(0, 0, 3);
+
+            // Base arm
+            var model1 = ModelXForm(new float3(0, 0, 0), new float3(_rotation1.x, _rotation1.y, _rotation1.z), new float3(-0.5f, 0, 0));
+            _xform = projection * view * model1 * float4x4.CreateScale(0.5f, 0.1f, 0.1f);
+            RC.SetShaderParam(_xformParam, _xform);
+            RC.Render(_mesh);
+
+            // Base plate
+            var model1b = ModelXForm(new float3(-0.5f , 0, 0), new float3(0, 0, 0), new float3(0, 0, 0));
+            _xform =projection * view * model1 * model1b * float4x4.CreateScale(0.1f, 0.2f, 0.2f);
+            RC.SetShaderParam(_xformParam, _xform);
+            RC.Render(_mesh);
+
+            // Upper Arm
+            var model2 = ModelXForm(new float3(1, 0, 0), new float3(_rotation2.x, _rotation2.y, 0), new float3(-0.5f, 0, 0));
+            _xform = projection * view * model1 * model2 * float4x4.CreateScale(0.5f, 0.1f, 0.1f); ;
+            RC.SetShaderParam(_xformParam, _xform);
+            RC.Render(_mesh);
+
+            // Lower Arm
+            var model3 = ModelXForm(new float3(1, 0, 0), new float3(_rotation3.x, _rotation3.y, 0), new float3(-0.5f, 0, 0));
+            _xform = projection * view * model1 * model2 * model3 * float4x4.CreateScale(0.5f, 0.1f, 0.1f); ;
+            RC.SetShaderParam(_xformParam, _xform);
             RC.Render(_mesh);
 
             // Swap buffers: Show the contents of the backbuffer (containing the currently rendered farame) on the front buffer.
             Present();
+        }
+
+        private static float4x4 ModelXForm(float3 pos, float3 rot, float3 pivot)
+        {
+            return float4x4.CreateTranslation(pos + pivot)
+                   * float4x4.CreateRotationY(rot.y)
+                   * float4x4.CreateRotationX(rot.x)
+                   * float4x4.CreateRotationZ(rot.z)
+                   * float4x4.CreateTranslation(-pivot);
         }
 
 
@@ -181,7 +238,7 @@ namespace Fusee.Tutorial.Core
             // 0.25*PI Rad -> 45° Opening angle along the vertical direction. Horizontal opening angle is calculated based on the aspect ratio
             // Front clipping happens at 1 (Objects nearer than 1 world unit get clipped)
             // Back clipping happens at 2000 (Anything further away from the camera than 2000 world units gets clipped, polygons will be cut)
-            var projection = float4x4.CreatePerspectiveFieldOfView(MathHelper.PiOver4, aspectRatio, 1, 20000);
+            var projection = float4x4.CreatePerspectiveFieldOfView(3.141592f * 0.25f, aspectRatio, 1, 20000);
             RC.Projection = projection;
         }
 
