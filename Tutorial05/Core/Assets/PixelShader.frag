@@ -6,14 +6,16 @@ varying vec3 normal;
 uniform vec3 albedo;
 uniform float shininess;
 uniform float specfactor;
+uniform float specintensity;
+uniform vec3 speccolor;
+uniform vec3 lightposition;
 
 void main()
 {
-	//vec3 nnormal = normal;
     vec3 nnormal = normalize(normal);
 
     // Diffuse
-    vec3 lightdir = vec3(0, 0, -1);
+    vec3 lightdir = lightposition;
     float intensityDiff = dot(nnormal, lightdir);
 
     // Specular
@@ -25,5 +27,6 @@ void main()
         intensitySpec = pow(max(0.0, dot(h, nnormal)), shininess);
     }
 
-    gl_FragColor = vec4(1,1,1, 1);
+
+    gl_FragColor = vec4(intensityDiff * albedo + vec3(intensitySpec), 1);
 }

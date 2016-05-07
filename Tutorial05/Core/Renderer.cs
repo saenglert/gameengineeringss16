@@ -10,9 +10,12 @@ namespace Fusee.Tutorial.Core
 {
     class Renderer : SceneVisitor
     {
-        public RenderContext RC;
+        private RenderContext RC;
         public IShaderParam AlbedoParam;
         public IShaderParam ShininessParam;
+        public IShaderParam IntensityParam;
+        public IShaderParam ColorParam;
+        public IShaderParam LightParam;
         public float4x4 View;
         private Dictionary<MeshComponent, Mesh> _meshes = new Dictionary<MeshComponent, Mesh>();
         private CollapsingStateStack<float4x4> _model = new CollapsingStateStack<float4x4>();
@@ -27,6 +30,14 @@ namespace Fusee.Tutorial.Core
             RC.SetShader(shader);
             AlbedoParam = RC.GetShaderParam(shader, "albedo");
             ShininessParam = RC.GetShaderParam(shader, "shininess");
+            IntensityParam = RC.GetShaderParam(shader, "specintensity");
+            ColorParam = RC.GetShaderParam(shader, "speccolor");
+            LightParam = RC.GetShaderParam(shader, "lightposition");
+        }
+
+        public void setLightPosition(float3 position)
+        {
+            this.RC.SetShaderParam(LightParam, position);
         }
 
         private Mesh LookupMesh(MeshComponent mc)
@@ -69,6 +80,8 @@ namespace Fusee.Tutorial.Core
         {
             RC.SetShaderParam(AlbedoParam, material.Diffuse.Color);
             RC.SetShaderParam(ShininessParam, material.Specular.Shininess);
+            //RC.SetShaderParam(IntensityParam, material.Specular.Intensity);
+            //RC.SetShaderParam(ColorParam, material.Specular.Color);
         }
         [VisitMethod]
         void OnTransform(TransformComponent xform)

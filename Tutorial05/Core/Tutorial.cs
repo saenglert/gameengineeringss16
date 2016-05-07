@@ -13,14 +13,19 @@ namespace Fusee.Tutorial.Core
     [FuseeApplication(Name = "Tutorial Example", Description = "The official FUSEE Tutorial.")]
     public class Tutorial : RenderCanvas
     {
-
-        private IShaderParam _albedoParam;
         private float _alpha = 0.001f;
         private float _beta;
 
         private SceneContainer _wuggy;
         private Renderer _renderer;
         private TransformComponent _wheelBigL;
+        private TransformComponent _wheelBigR;
+        private TransformComponent _wheelSmallL;
+        private TransformComponent _wheelSmallR;
+        private TransformComponent _neckLo;
+        private TransformComponent _neckHi;
+        private TransformComponent _eyesPitch;
+        private float3 _lightPosition;
 
         public static Mesh LoadMesh(string assetName)
         {
@@ -37,12 +42,19 @@ namespace Fusee.Tutorial.Core
         // Init is called on startup. 
         public override void Init()
         {
-            var vertsh = AssetStorage.Get<string>("VertexShader.vert");
-            var pixsh = AssetStorage.Get<string>("PixelShader.frag");
-
             _wuggy = AssetStorage.Get<SceneContainer>("wuggy.fus");
             _wheelBigL = _wuggy.Children.FindNodes(n => n.Name == "WheelBigL").First().GetTransform();
+            _wheelBigR = _wuggy.Children.FindNodes(n => n.Name == "WheelBigR").First().GetTransform();
+            _wheelSmallR = _wuggy.Children.FindNodes(n => n.Name == "WheelSmallR").First().GetTransform();
+            _wheelSmallL = _wuggy.Children.FindNodes(n => n.Name == "WheelSmallL").First().GetTransform();
+            _neckLo = _wuggy.Children.FindNodes(n => n.Name == "NeckLo").First().GetTransform();
+            _neckHi = _wuggy.Children.FindNodes(n => n.Name == "NeckHi").First().GetTransform();
+            _eyesPitch = _wuggy.Children.FindNodes(n => n.Name == "Eyes_Pitch").First().GetTransform();
+            
+            _lightPosition = new float3(0, 0, -1);
+
             _renderer = new Renderer(RC);
+            _renderer.setLightPosition(_lightPosition);
 
             // Set the clear color for the backbuffer
             RC.ClearColor = new float4(1, 1, 1, 1);
@@ -62,11 +74,12 @@ namespace Fusee.Tutorial.Core
                 _beta  -= speed.y*0.0001f;
             }
 
-            _wheelBigL.Rotation += new float3(-0.05f * Keyboard.WSAxis, 0, 0);
-
-            float shineUpdate = Keyboard.UpDownAxis;
-            changeShininess(_wuggy, shineUpdate);
-
+            ControlEyes();
+            ControlWeels();
+            ControlNeck();
+            ControlLight();
+            ControlShininess(_wuggy, 0.05f * Mouse.WheelVel);
+            
             // Setup matrices
             float4x4 view = float4x4.CreateTranslation(0, 0, 5)*float4x4.CreateRotationY(_alpha)*float4x4.CreateRotationX(_beta)*float4x4.CreateTranslation(0, -0.5f, 0);
 
@@ -78,21 +91,79 @@ namespace Fusee.Tutorial.Core
             Present();
         }
 
-        public void changeShininess(SceneContainer root, float value)
+        public void ControlLight()
+        {
+            _lightPosition.x += 0.5f * Keyboard.LeftRightAxis;
+            _renderer.setLightPosition(_lightPosition);
+        }
+
+        public void ControlEyes()
+        {
+            _neckHi.Rotation.y = -_alpha;
+            _eyesPitch.Rotation.x = -_beta;
+        }
+
+        public void ControlWeels()
+        {
+            float wsInput = Keyboard.WSAxis;
+            _wheelBigL.Rotation += new float3(-0.05f * wsInput, 0, 0);
+            _wheelBigR.Rotation += new float3(-0.05f * wsInput, 0, 0);
+            _wheelSmallL.Rotation += new float3(-0.05f * 2 * wsInput, 0, 0);
+            _wheelSmallR.Rotation += new float3(-0.05f * 2 * wsInput, 0, 0);
+            ControlSteering();
+        }
+
+        public void ControlSteering()
+        {
+            float adInput = -Keyboard.ADAxis;
+            float maxAngle = 0.3f;
+            System.Diagnostics.Debug.WriteLine("Input: " + adInput + " Rotation: " + _wheelSmallL.Rotation.y);
+            if (adInput > 0 && _wheelSmallL.Rotation.y < maxAngle)
+                updateSteering(adInput);
+            
+            if (adInput < 0 && _wheelSmallL.Rotation.y > -maxAngle)
+                updateSteering(adInput);             
+        }
+
+        public void updateSteering(float adInput)
+        {
+            _wheelSmallL.Rotation += new float3(0, 0.05f * adInput, 0);
+            _wheelSmallR.Rotation += new float3(0, 0.05f * adInput, 0);
+        }
+
+        public void ControlNeck()
+        {
+            float input = Keyboard.UpDownAxis;
+
+            if (input > 0 && _neckLo.Translation.y < 210)
+               updateNeck();
+            
+
+            if (input < 0 && _neckLo.Translation.y > 160)
+                updateNeck();
+        }
+
+        public void updateNeck()
+        {
+            _neckLo.Translation.y += Keyboard.UpDownAxis;
+            _neckHi.Translation.y += Keyboard.UpDownAxis;
+        }
+
+        public void ControlShininess(SceneContainer root, float value)
         {
             foreach (var child in root.Children)
             {
                 if (child.GetMaterial() != null) child.GetMaterial().Specular.Shininess += value;
-                if (child.Children != null) changeShininess(child, value);
+                if (child.Children != null) ControlShininess(child, value);
             }
         }
 
-        private void changeShininess(SceneNodeContainer root, float value)
+        private void ControlShininess(SceneNodeContainer root, float value)
         {
             foreach (var child in root.Children)
             {
                 if (child.GetMaterial() != null) child.GetMaterial().Specular.Shininess += value;
-                if (child.Children != null) changeShininess(child, value);
+                if (child.Children != null) ControlShininess(child, value);
             }
         }
 
